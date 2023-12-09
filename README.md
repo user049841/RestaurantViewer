@@ -1,4 +1,7 @@
 # RestaurantViewer
+To install this, read through Setup Instructions.md
+
+
 By default displays nearby restaurants, and their reviews and available vouchers.
 
 Allows restaurants to edit their display images, as well as their menu. Vegan/Gluten free options can be marked as such.
