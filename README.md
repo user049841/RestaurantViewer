@@ -7,6 +7,7 @@ Recommends restaurants to users based on similarity to restaurants that they rat
 Integrates with google maps to display a path to the restaurant from the user's current location.
 
 Created with 4 colleagues.
+
 Sample image:
   ![alt text](https://i.imgur.com/kmYamgI.png)
   
