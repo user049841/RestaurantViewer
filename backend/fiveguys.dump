@@ -1,0 +1,266 @@
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+
+--
+-- Name: daytype; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.daytype AS ENUM (
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday'
+);
+
+
+--
+-- Name: percentage; Type: DOMAIN; Schema: public; Owner: -
+--
+
+CREATE DOMAIN public.percentage AS integer DEFAULT 0
+	CONSTRAINT percentage_check CHECK ((VALUE >= 0 AND VALUE <= 100));
+
+
+--
+-- Name: id_sequence; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.id_sequence START WITH 1 INCREMENT BY 1;
+
+--
+-- Name: diners; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.diners (
+    id integer default nextval('public.id_sequence'::regclass) primary key,
+    email text NOT NULL,
+    username text NOT NULL,
+    password text NOT NULL,
+    avatar text DEFAULT '/images/default-diner-pic.png',
+    recommend_tags text[] DEFAULT '{}',
+    visited text[] DEFAULT '{}',
+    blacklist integer[] DEFAULT '{}',
+    points JSONB DEFAULT '{}'::jsonb,
+    reset_code UUID
+);
+
+
+--
+-- Name: eateries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.eateries (
+    id integer default nextval('public.id_sequence'::regclass) primary key,
+    eatery_name text NOT NULL,
+    email text NOT NULL,
+    password text NOT NULL,
+    address text,
+    phone_number varchar(10),
+    description text DEFAULT '',
+    avatar text DEFAULT '/images/default-eatery-pic.png',
+    images text[],
+    pricing text DEFAULT '$',
+    tags text[],
+    latitude decimal(8, 6),
+    longitude decimal(9, 6),
+    reviewed integer[] DEFAULT '{}',
+    reset_code UUID
+);
+
+
+--
+-- Name: diner_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.diner_sessions (
+    id serial primary key,
+    diner integer NOT NULL references public.diners(id),
+    session_uuid UUID NOT NULL,
+    time_created decimal(20, 7) NOT NULL
+);
+
+
+--
+-- Name: eatery_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.eatery_sessions (
+    id serial primary key,
+    eatery integer NOT NULL references public.eateries(id),
+    session_uuid UUID NOT NULL,
+    time_created decimal(20, 7) NOT NULL
+);
+
+
+--
+-- Name: reviews; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.reviews (
+    id serial primary key,
+    eatery_id integer NOT NULL references public.eateries(id),
+    rating decimal(2, 1),
+    title text,
+    description text NOT NULL,
+    parent_id integer references public.reviews(id),
+    date timestamp NOT NULL,
+    edited boolean DEFAULT FALSE,
+    deleted boolean DEFAULT FALSE,
+
+    -- The id of the diner/eatery making the review.
+    user_id integer
+);
+
+
+--
+-- Name: availability; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.availability (
+    id serial primary key,
+    eatery_id integer NOT NULL REFERENCES public.eateries(id),
+    day public.daytype NOT NULL,
+    start_time time NOT NULL,
+    end_time time NOT NULL
+);
+
+
+--
+-- Name: discountschedule; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.discountschedule (
+    id serial primary key,
+    eatery_id integer NOT NULL REFERENCES public.eateries(id),
+    name text NOT NULL,
+    description text,
+    day public.daytype NOT NULL,
+    start_time time NOT NULL,
+    end_time time NOT NULL,
+    discount public.percentage NOT NULL,
+    num_vouchers integer NOT NULL
+);
+
+
+--
+-- Name: vouchers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vouchers (
+    id serial primary key,
+    eatery_id integer NOT NULL REFERENCES public.eateries(id),
+    name text NOT NULL,
+    description text NOT NULL,
+    discount_rate public.percentage NOT NULL,
+    num_vouchers integer NOT NULL,
+    start_date timestamp(0) NOT NULL,
+    end_date timestamp(0) NOT NULL
+);
+
+
+--
+-- Name: loyalty_vouchers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.loyalty_vouchers (
+    id serial primary key,
+    eatery_id integer REFERENCES public.eateries(id),
+    type text,
+    item text
+);
+
+
+--
+-- Name: voucher_codes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.voucher_codes (
+    code text primary key,
+    voucher_id integer REFERENCES public.vouchers(id) ON DELETE CASCADE,
+    loyalty_voucher_id integer REFERENCES public.loyalty_vouchers(id) ON DELETE CASCADE,
+    diner_id integer NOT NULL REFERENCES public.diners(id) ON DELETE CASCADE
+);
+
+
+--
+-- Name: menu_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.menu_items (
+    id serial primary key,
+    eatery_id integer NOT NULL REFERENCES public.eateries(id),
+    item_name text,
+    category text NOT NULL,
+    price decimal(10, 2),
+    vegan boolean,
+    gluten_free boolean
+);
+
+--
+-- Name: loyalty_system; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.loyalty_system (
+    eatery_id integer primary key REFERENCES public.eateries(id),
+    enabled boolean DEFAULT FALSE,
+    type text,
+    item text,
+    point_goal integer,
+    description text DEFAULT ''
+);
+
+
+CREATE OR REPLACE FUNCTION public.del_expired_vouchers() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    DELETE FROM vouchers
+    WHERE end_date <= CURRENT_TIMESTAMP;
+    RETURN NULL;
+END;
+$$;
+
+
+CREATE OR REPLACE TRIGGER trigger_del_expired_vouchers
+    AFTER INSERT on public.vouchers
+    EXECUTE PROCEDURE public.del_expired_vouchers();
+
+
+CREATE OR REPLACE FUNCTION public.get_avg_rating(given_eatery_id integer)
+RETURNS float
+AS $$
+DECLARE
+    avg_rating float;
+BEGIN
+    SELECT COALESCE(AVG(rating), -1) INTO avg_rating
+    FROM public.reviews r
+    WHERE eatery_id = given_eatery_id
+    AND r.deleted = FALSE
+    AND r.date = (
+        SELECT MAX(date)
+        FROM public.reviews re
+        WHERE r.user_id = re.user_id
+        AND re.deleted = FALSE
+        AND re.eatery_id = given_eatery_id
+        AND re.parent_id IS NULL
+    );
+    RETURN avg_rating;
+END;
+$$ LANGUAGE plpgsql;
