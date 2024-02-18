@@ -1,15 +1,13 @@
 # README #
 
-### COMP3900W16AFiveGuys ###
-
 **The Eatery**
 
 ### BACKEND SETUP (DO FIRST - terminal 1) ###
 
 1. Open QTerminal 
-2. Create a folder to store project (e.g. mkdir COMP3900)
-3. Change directory to created folder (e.g. cd COMP3900)
-4. Download ZIP file from Github and extract to project folder (e.g. COMP3900)
+2. Create a folder to store project
+3. Change directory to created folder
+4. Download ZIP file from Github and extract to project folder
 5. Run 'cd {PRESS TAB}' to change to downloaded project folder
 6. Type in: sudo bash setup.sh
 7. Enter root password: lubuntu
@@ -20,7 +18,7 @@
 ### FRONTEND SETUP (terminal 2) ###
 
 1. Open another instance of QTerminal 
-2. Change directory to project folder (e.g. cd COMP3900/capstone-project-3900w16afiveguys-1-main)
+2. Change directory to project folder
 3. Type in: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
 4. Type in: source ~/.bashrc
 5. Type in: nvm install 18.6.0 
